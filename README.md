@@ -13,7 +13,8 @@ Rauhallinen, selaimessa toimiva matematiikkapeli lapsille suomeksi. Pelkkää HT
 - 5 oikeaa vastausta vie seuraavalle tasolle tai seuraavaan maailmaan.
 - Väärästä vastauksesta ei rangaista: väärä vaihtoehto himmenee ja näkyviin tulee lempeä vihje (pienille kuvallinen: esineisiin ilmestyvät numerot). Kahden väärän vastauksen jälkeen seuraava tehtävä on helpompi.
 - Oikeasta vastauksesta tähti ja lyhyt, rauhallinen animaatio. Ei ajastimia, ei mainoksia, ei jatkuvaa liikettä. Animaatiot jäävät pois, jos laitteessa on valittu "vähennä liikettä".
-- Äänet ovat oletuksena pois päältä. Kaiutinpainike lukee tehtävän ohjeen ääneen selaimen puhesynteesillä.
+- Äänet ovat oletuksena pois päältä. Kaiutinpainike lukee tehtävän ohjeen ääneen selaimen puhesynteesillä. Peli käyttää vain suomenkielisiä ääniä ja valitsee niistä parhaan; äänen ja puhenopeuden voi vaihtaa kohdasta *Aikuisille*. Luonnollisemman äänen saa lataamalla laitteeseen esim. Satu (parannettu/premium) ‑äänen (Mac: Järjestelmäasetukset → Käyttöapu → Puhuttu sisältö).
+- Vastauksen voi valita myös näppäimistöllä: numeronäppäimet (kaksinumeroinen luku numero kerrallaan, pienillä 0 = 10), nuolet ← → kumpi on enemmän ‑tehtävässä ja Enter jatkaa.
 - Eteneminen tallentuu selaimen `localStorage`en erikseen kummallekin pelaajalle. Nollaus löytyy aloitusnäytön kohdasta *Aikuisille*.
 
 ## Tiedostot

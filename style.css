@@ -570,3 +570,26 @@ h1, h2, h3 { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Näppäimistö ja puheasetukset ---------- */
+.opt.typed { border-color: var(--star); background: #FFF8E6; }
+.options.nudge .opt:not(:disabled) { animation: nudge .45s ease; }
+@keyframes nudge { 50% { transform: scale(1.04); } }
+
+#voiceSettings { border-top: 2px solid var(--line); border-bottom: 2px solid var(--line); padding: 14px 0 4px; margin: 4px 0 14px; }
+.set-row { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; font-weight: 700; color: var(--ink); }
+.set-row span { min-width: 84px; }
+.set-row select {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: 1rem;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  padding: 0 10px;
+}
+.set-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.parents .small { font-size: .92rem; margin-top: 12px; }

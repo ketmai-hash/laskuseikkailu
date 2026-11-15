@@ -195,10 +195,12 @@
       if (s && s.players) {
         for (const k of Object.keys(PLAYERS)) s.players[k] = Object.assign(defaultPlayer(), s.players[k] || {});
         s.sound = !!s.sound;
+        s.rate = typeof s.rate === 'number' ? s.rate : 0.9;
+        s.voice = s.voice || '';
         return s;
       }
     } catch (e) { /* ei tallennusta tai estetty */ }
-    return { sound: false, players: { pienet: defaultPlayer(), isot: defaultPlayer() } };
+    return { sound: false, rate: 0.9, voice: '', players: { pienet: defaultPlayer(), isot: defaultPlayer() } };
   }
   let store = load();
   function save() {
@@ -237,27 +239,70 @@
     level: () => tone([523, 659, 784, 1047], 0.18),
   };
 
+  // ---------- Puhe ----------
+  // Käytetään vain suomenkielisiä ääniä. Jos sellaista ei ole, ei puhuta lainkaan,
+  // koska vieraskielinen ääni lausuu suomea huonosti.
   const hasSpeech = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
-  let fiVoice = null;
-  function findVoice() {
+  const VOICE_HELP = 'Luonnollisemman äänen saa lataamalla laitteeseen paremman suomenkielisen äänen. ' +
+    '<b>Mac:</b> Järjestelmäasetukset → Käyttöapu → Puhuttu sisältö → Järjestelmän ääni → Hallitse ääniä… → Suomi → lataa esim. Satu (parannettu tai premium). ' +
+    '<b>iPad/iPhone:</b> Asetukset → Käyttöapu → Puhuttu sisältö → Äänet → Suomi. ' +
+    '<b>Windows:</b> Microsoft Edge -selaimessa on valmiina luonnolliset suomenkieliset äänet (Noora, Harri). ' +
+    'Lataamisen jälkeen sulje selain kokonaan ja avaa peli uudelleen.';
+  let fiVoices = [];
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+  function voiceScore(v) {
+    const id = `${v.name} ${v.voiceURI}`;
+    let s = 0;
+    if (/natural|neural/i.test(id)) s += 6;
+    if (/premium/i.test(id)) s += 5;
+    if (/enhanced|parannettu/i.test(id)) s += 3;
+    if (/compact|espeak/i.test(id)) s -= 3;
+    // Applen hupi-/Eloquence-äänet kuulostavat robottimaisilta
+    if (/\b(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i.test(v.name)) s -= 4;
+    return s;
+  }
+  function loadVoices() {
     if (!hasSpeech) return;
     const vs = window.speechSynthesis.getVoices() || [];
-    fiVoice = vs.find((v) => /^fi/i.test(v.lang)) || null;
+    fiVoices = vs.filter((v) => /^fi([-_]|$)/i.test(v.lang)).sort((a, b) => voiceScore(b) - voiceScore(a));
+    document.documentElement.classList.toggle('no-speech', fiVoices.length === 0);
+    fillVoiceSettings();
   }
+  const currentVoice = () => fiVoices.find((v) => v.voiceURI === store.voice) || fiVoices[0] || null;
+
+  function fillVoiceSettings() {
+    const box = document.getElementById('voiceSettings');
+    if (!box) return;
+    if (!fiVoices.length) {
+      box.innerHTML = `<p><b>Puheääni:</b> tässä selaimessa ei ole suomenkielistä puheääntä, joten ääneen lukeminen on pois käytöstä.</p><p class="small">${VOICE_HELP}</p>`;
+      return;
+    }
+    const cv = currentVoice();
+    box.innerHTML = `
+      <label class="set-row"><span>Puheääni</span><select id="voiceSel">${fiVoices.map((v) =>
+        `<option value="${esc(v.voiceURI)}" ${v === cv ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+      <label class="set-row"><span>Nopeus</span><input id="rateSel" type="range" min="0.6" max="1.2" step="0.05" value="${store.rate}"></label>
+      <div class="row"><button class="text-btn" data-act="testVoice">Kokeile ääntä</button></div>
+      <p class="small">${VOICE_HELP}</p>`;
+  }
+
+  document.documentElement.classList.add('no-speech');
   if (hasSpeech) {
-    findVoice();
-    window.speechSynthesis.addEventListener && window.speechSynthesis.addEventListener('voiceschanged', findVoice);
-  } else {
-    document.documentElement.classList.add('no-speech');
+    loadVoices();
+    if (window.speechSynthesis.addEventListener) window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    else window.speechSynthesis.onvoiceschanged = loadVoices;
+    setTimeout(loadVoices, 700); // osa selaimista lataa äänet viiveellä
   }
   function speak(text) {
-    if (!hasSpeech || !text) return;
+    const v = hasSpeech && currentVoice();
+    if (!v || !text) return;
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'fi-FI';
-      u.rate = 0.9;
-      if (fiVoice) u.voice = fiVoice;
+      u.voice = v;
+      u.lang = v.lang;
+      u.rate = store.rate;
       window.speechSynthesis.speak(u);
     } catch (e) { /* ei puhetta */ }
   }
@@ -526,6 +571,7 @@
 
   function clearTimer() {
     if (cur.timer) { clearTimeout(cur.timer); cur.timer = null; }
+    resetKeys();
     if (hasSpeech) try { window.speechSynthesis.cancel(); } catch (e) { /* */ }
   }
 
@@ -554,7 +600,9 @@
           <div class="inner">
             <p><b>Pienet</b>: esineiden laskeminen, kumpi on enemmän ja yhteenlasku kuvilla. <b>Isot</b>: yhteen- ja vähennyslasku 0–100, puuttuva luku sekä kertotaulut 2, 5 ja 10.</p>
             <p>Viisi oikeaa vastausta vie seuraavalle tasolle. Väärästä vastauksesta saa vihjeen ja uuden yrityksen; kahden virheen jälkeen seuraava tehtävä on helpompi. Eteneminen tallentuu tähän selaimeen.</p>
-            <p>Äänet ovat oletuksena pois päältä. Kaiutinpainike tehtävän vieressä lukee ohjeen ääneen (jos laitteessa on suomenkielinen puheääni).</p>
+            <p><b>Näppäimistö:</b> vastauksen voi valita myös numeronäppäimillä. Kaksinumeroinen luku näppäillään numero kerrallaan (esim. 1 ja 5 = 15), ja pienten tehtävissä 0 tarkoittaa lukua 10. Kumpi on enemmän ‑tehtävässä valitaan nuolinäppäimillä ← ja →. Enter jatkaa seuraavalle tasolle.</p>
+            <p>Äänet ovat oletuksena pois päältä. Kaiutinpainike tehtävän vieressä lukee ohjeen ääneen.</p>
+            <div id="voiceSettings"></div>
             <div class="row">
               <button class="text-btn" data-act="reset" data-id="pienet">Nollaa Pienet</button>
               <button class="text-btn" data-act="reset" data-id="isot">Nollaa Isot</button>
@@ -562,6 +610,7 @@
           </div>
         </details>
       </div>`;
+    fillVoiceSettings();
   }
 
   // ---------- Hahmon valinta ----------
@@ -867,6 +916,7 @@
       save();
       renderHome();
     },
+    testVoice: () => speak('Hei! Montako omenaa näet? Seitsemän plus viisi on kaksitoista.'),
   };
 
   app.addEventListener('click', (e) => {
@@ -874,6 +924,81 @@
     if (!b || !app.contains(b)) return;
     const fn = actions[b.dataset.act];
     if (fn) fn(b, e);
+  });
+
+  // Puheäänen asetukset (Aikuisille-osio)
+  app.addEventListener('change', (e) => {
+    if (e.target.id === 'voiceSel') { store.voice = e.target.value; save(); actions.testVoice(); }
+    if (e.target.id === 'rateSel') { store.rate = Number(e.target.value); save(); actions.testVoice(); }
+  });
+
+  // ======================================================================
+  // Näppäimistö: numeronäppäimet valitsevat vastauksen
+  // ======================================================================
+  let keyBuf = '';
+  let keyTimer = null;
+  const onPlayScreen = () => !!(cur.task && app.querySelector('.screen.play'));
+
+  function resetKeys() {
+    keyBuf = '';
+    if (keyTimer) { clearTimeout(keyTimer); keyTimer = null; }
+    markTyped();
+  }
+  function markTyped() {
+    app.querySelectorAll('.opt').forEach((b) =>
+      b.classList.toggle('typed', !!keyBuf && !b.disabled && b.dataset.val.startsWith(keyBuf)));
+  }
+  function pressOption(val) {
+    const b = app.querySelector(`.opt[data-val="${val}"]`);
+    if (b && !b.disabled) answer(b);
+  }
+  function nudge() {
+    const o = app.querySelector('.options');
+    if (!o) return;
+    o.classList.remove('nudge');
+    void o.offsetWidth;
+    o.classList.add('nudge');
+  }
+  function onDigit(d) {
+    const t = cur.task;
+    if (cur.locked || t.kind === 'compare') return;
+    const vals = [...app.querySelectorAll('.opt:not(:disabled)')].map((b) => b.dataset.val);
+    // Pienille: 0 tarkoittaa lukua 10, jos nolla ei ole vaihtoehto
+    if (d === '0' && !keyBuf && !vals.includes('0') && vals.includes('10')) { resetKeys(); pressOption(10); return; }
+    let buf = keyBuf + d;
+    if (!vals.some((v) => v.startsWith(buf))) buf = d;
+    if (!vals.some((v) => v.startsWith(buf))) { resetKeys(); nudge(); return; }
+    if (keyTimer) { clearTimeout(keyTimer); keyTimer = null; }
+    keyBuf = buf;
+    const exact = vals.includes(buf);
+    const longer = vals.some((v) => v !== buf && v.startsWith(buf));
+    if (exact && !longer) { resetKeys(); pressOption(buf); return; }
+    markTyped();
+    // Esim. vaihtoehdot 1 ja 12: odotetaan hetki, tuleeko toinen numero
+    keyTimer = setTimeout(() => {
+      const v = keyBuf;
+      resetKeys();
+      if (exact) pressOption(v);
+    }, exact ? 1200 : 3000);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest && e.target.closest('input, select, textarea')) return;
+    if (/^[0-9]$/.test(e.key)) {
+      if (onPlayScreen()) { e.preventDefault(); onDigit(e.key); }
+      return;
+    }
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && onPlayScreen() && cur.task.kind === 'compare') {
+      e.preventDefault();
+      const b = app.querySelector(`.cmp-btn[data-val="${e.key === 'ArrowLeft' ? 0 : 1}"]`);
+      if (b && !b.disabled && !cur.locked) answer(b);
+      return;
+    }
+    if (e.key === 'Enter' && !(e.target.closest && e.target.closest('button, summary'))) {
+      const p = app.querySelector('[data-act="play"]');
+      if (p) { e.preventDefault(); p.click(); }
+    }
   });
 
   renderHome();
